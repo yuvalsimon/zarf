@@ -18,6 +18,7 @@ import (
 	"github.com/zarf-dev/zarf/src/pkg/packager/layout"
 	"github.com/zarf-dev/zarf/src/pkg/zoci"
 	"github.com/zarf-dev/zarf/src/test/testutil"
+	"github.com/zarf-dev/zarf/src/types"
 	_ "modernc.org/sqlite"
 	"oras.land/oras-go/v2/registry"
 )
@@ -45,7 +46,7 @@ func TestAssembleLayers(t *testing.T) {
 			name: "Assemble layers from a package",
 			path: "testdata/basic",
 			opts: packager.PublishPackageOptions{
-				RemoteOptions: packager.RemoteOptions{
+				RemoteOptions: types.RemoteOptions{
 					PlainHTTP: true,
 				},
 				OCIConcurrency: 3,
@@ -87,7 +88,7 @@ func TestAssembleLayers(t *testing.T) {
 			// get all layers
 			layers, err := remote.AssembleLayers(ctx, layoutExpected.Pkg.Components, false, zoci.AllLayers)
 			require.NoError(t, err)
-			require.Len(t, layers, 9)
+			require.Len(t, layers, 10)
 
 			nonDeterministicLayers := []string{"zarf.yaml", "checksums.txt"}
 
@@ -116,6 +117,12 @@ func TestAssembleLayers(t *testing.T) {
 			componentLayers, err := remote.AssembleLayers(ctx, layoutExpected.Pkg.Components, false, zoci.ComponentLayers)
 			require.NoError(t, err)
 			require.Len(t, componentLayers, 3)
+
+			// get documentation layers
+			docLayers, err := remote.AssembleLayers(ctx, layoutExpected.Pkg.Components, false, zoci.DocLayers)
+			require.NoError(t, err)
+			// 2 metadata layers (zarf.yaml, checksums.txt) + 1 documentation.tar
+			require.Len(t, docLayers, 3)
 		})
 	}
 }

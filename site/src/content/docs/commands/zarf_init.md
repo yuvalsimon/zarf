@@ -22,7 +22,7 @@ This command looks for a zarf-init package in the local directory that the comma
 
 
 ```
-zarf init [flags]
+zarf init [ PACKAGE_SOURCE ] [flags]
 ```
 
 ### Examples
@@ -34,6 +34,9 @@ $ zarf init
 
 # Initializing w/ Zarfs internal git server:
 $ zarf init --components=git-server
+
+# Initializing w/ Zarfs with a custom init package:
+$ zarf init oci://ghcr.io/zarf-dev/packages/init:v0.69.0
 
 # Initializing w/ an internal registry but with a different nodeport:
 $ zarf init --nodeport=30333
@@ -77,10 +80,10 @@ $ zarf init --artifact-push-password={PASSWORD} --artifact-push-username={USERNA
       --registry-secret string          Registry secret value
       --registry-url string             External registry url address to use for this Zarf cluster
       --retries int                     Number of retries to perform for Zarf operations like git/image pushes (default 3)
-      --set stringToString              Specify deployment variables to set on the command line (KEY=value) (default [])
-      --skip-signature-validation       Skip validating the signature of the Zarf package
+      --set-variables stringToString    Specify deployment variables to set on the command line (KEY=value) (default [])
       --storage-class string            Specify the storage class to use for the registry and git server.  E.g. --storage-class=standard
       --timeout duration                Timeout for health checks and Helm operations such as installs and rollbacks (default 15m0s)
+      --verify                          Verify the Zarf package signature
 ```
 
 ### Options inherited from parent commands

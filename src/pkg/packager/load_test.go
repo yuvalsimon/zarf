@@ -16,6 +16,7 @@ import (
 
 	"github.com/zarf-dev/zarf/src/pkg/cluster"
 	"github.com/zarf-dev/zarf/src/pkg/packager/filters"
+	"github.com/zarf-dev/zarf/src/pkg/packager/layout"
 	"github.com/zarf-dev/zarf/src/test/testutil"
 )
 
@@ -41,10 +42,9 @@ func TestLoadPackage(t *testing.T) {
 
 			for _, shasum := range []string{tt.shasum, ""} {
 				opt := LoadOptions{
-					Shasum:                  shasum,
-					PublicKeyPath:           "",
-					SkipSignatureValidation: false,
-					Filter:                  filters.Empty(),
+					Shasum:        shasum,
+					PublicKeyPath: "",
+					Filter:        filters.Empty(),
 				}
 				pkgLayout, err := LoadPackage(ctx, tt.source, opt)
 				require.NoError(t, err)
@@ -55,15 +55,50 @@ func TestLoadPackage(t *testing.T) {
 			}
 
 			opt := LoadOptions{
-				Shasum:                  "foo",
-				PublicKeyPath:           "",
-				SkipSignatureValidation: false,
-				Filter:                  filters.Empty(),
+				Shasum:        "foo",
+				PublicKeyPath: "",
+				Filter:        filters.Empty(),
 			}
 			_, err := LoadPackage(ctx, tt.source, opt)
 			require.ErrorContains(t, err, fmt.Sprintf("to be %s, found %s", opt.Shasum, tt.shasum))
 		})
 	}
+
+	t.Run("VerificationStrategy explicit values", func(t *testing.T) {
+		t.Parallel()
+
+		tarPath := filepath.Join("testdata", "load-package", "compressed", "zarf-package-test-amd64-0.0.1.tar.zst")
+
+		// VerifyNever should skip verification entirely and succeed
+		opt := LoadOptions{
+			VerificationStrategy: layout.VerifyNever,
+			PublicKeyPath:        filepath.Join("layout", "testdata", "cosign.pub"),
+			Filter:               filters.Empty(),
+		}
+		pkgLayout, err := LoadPackage(ctx, tarPath, opt)
+		require.NoError(t, err)
+		require.Equal(t, "test", pkgLayout.Pkg.Metadata.Name)
+
+		// VerifyIfPossible should warn but continue on unsigned package
+		opt = LoadOptions{
+			VerificationStrategy: layout.VerifyIfPossible,
+			PublicKeyPath:        filepath.Join("layout", "testdata", "cosign.pub"),
+			Filter:               filters.Empty(),
+		}
+		pkgLayout, err = LoadPackage(ctx, tarPath, opt)
+		require.NoError(t, err)
+		require.Equal(t, "test", pkgLayout.Pkg.Metadata.Name)
+
+		// VerifyAlways should fail on unsigned package
+		opt = LoadOptions{
+			VerificationStrategy: layout.VerifyAlways,
+			PublicKeyPath:        filepath.Join("layout", "testdata", "cosign.pub"),
+			Filter:               filters.Empty(),
+		}
+		_, err = LoadPackage(ctx, tarPath, opt)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "signature verification failed")
+	})
 }
 
 func TestLoadSplitPackage(t *testing.T) {
@@ -107,9 +142,8 @@ func TestLoadSplitPackage(t *testing.T) {
 
 			// Load the split package, verify that the split package became one
 			opt := LoadOptions{
-				PublicKeyPath:           "",
-				SkipSignatureValidation: false,
-				Filter:                  filters.Empty(),
+				PublicKeyPath: "",
+				Filter:        filters.Empty(),
 			}
 			_, err = LoadPackage(ctx, packageSource, opt)
 			require.NoError(t, err)
@@ -164,7 +198,6 @@ func TestIdentifySource(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 

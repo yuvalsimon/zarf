@@ -138,13 +138,13 @@ func testHelmEscaping(t *testing.T) {
 	require.NoError(t, err, stdOut, stdErr)
 
 	// Verify the configmap was deployed, escaped, and contains all of its data
-	kubectlOut, err := exec.Command("kubectl", "-n", "default", "describe", "cm", "dont-template-me").Output()
-	require.NoError(t, err, "unable to describe configmap")
-	require.Contains(t, string(kubectlOut), `alert: OOMKilled {{ "{{ \"random.Values\" }}" }}`)
-	require.Contains(t, string(kubectlOut), "backtick1: \"content with backticks `some random things`\"")
-	require.Contains(t, string(kubectlOut), "backtick2: \"nested templating with backticks {{` random.Values `}}\"")
-	require.Contains(t, string(kubectlOut), `description: Pod {{$labels.pod}} in {{$labels.namespace}} got OOMKilled`)
-	require.Contains(t, string(kubectlOut), `TG9yZW0gaXBzdW0gZG9sb3Igc2l0IGFtZXQsIGNvbnNlY3RldHVyIG`)
+	kubectlOut, kubectlErr, err := e2e.Kubectl(t, "-n", "default", "describe", "cm", "dont-template-me")
+	require.NoError(t, err, kubectlOut, kubectlErr, "unable to describe configmap")
+	require.Contains(t, kubectlOut, `alert: OOMKilled {{ "{{ \"random.Values\" }}" }}`)
+	require.Contains(t, kubectlOut, "backtick1: \"content with backticks `some random things`\"")
+	require.Contains(t, kubectlOut, "backtick2: \"nested templating with backticks {{` random.Values `}}\"")
+	require.Contains(t, kubectlOut, `description: Pod {{$labels.pod}} in {{$labels.namespace}} got OOMKilled`)
+	require.Contains(t, kubectlOut, `TG9yZW0gaXBzdW0gZG9sb3Igc2l0IGFtZXQsIGNvbnNlY3RldHVyIG`)
 
 	// Remove the package.
 	stdOut, stdErr, err = e2e.Zarf(t, "package", "remove", "evil-templates", "--confirm")
@@ -154,7 +154,7 @@ func testHelmEscaping(t *testing.T) {
 func testHelmUninstallRollback(t *testing.T, tmpdir string) {
 	t.Log("E2E: Helm Uninstall and Rollback")
 
-	packageName := fmt.Sprintf("zarf-package-dos-games-%s-1.2.0.tar.zst", e2e.Arch)
+	packageName := fmt.Sprintf("zarf-package-dos-games-%s-1.3.0.tar.zst", e2e.Arch)
 	goodPath := filepath.Join(tmpdir, packageName)
 
 	// Create the evil package (with the bad service).
@@ -211,7 +211,7 @@ func testHelmUninstallRollback(t *testing.T, tmpdir string) {
 func testHelmAdoption(t *testing.T, tmpdir string) {
 	t.Log("E2E: Helm Adopt a Deployment")
 
-	packagePath := filepath.Join(tmpdir, fmt.Sprintf("zarf-package-dos-games-%s-1.2.0.tar.zst", e2e.Arch))
+	packagePath := filepath.Join(tmpdir, fmt.Sprintf("zarf-package-dos-games-%s-1.3.0.tar.zst", e2e.Arch))
 	deploymentManifest := "src/test/packages/25-manifest-adoption/deployment.yaml"
 
 	// Deploy dos-games manually into the cluster without Zarf

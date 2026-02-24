@@ -15,6 +15,7 @@ import (
 
 	"github.com/AlecAivazis/survey/v2"
 	"github.com/defenseunicorns/pkg/helpers/v2"
+	"github.com/zarf-dev/zarf/src/api/v1alpha1"
 	"github.com/zarf-dev/zarf/src/config"
 	"github.com/zarf-dev/zarf/src/config/lang"
 	"github.com/zarf-dev/zarf/src/pkg/cluster"
@@ -41,6 +42,7 @@ type initOptions struct {
 	timeout                 time.Duration
 	retries                 int
 	publicKeyPath           string
+	verify                  bool
 	skipSignatureValidation bool
 	confirm                 bool
 	ociConcurrency          int
@@ -50,18 +52,22 @@ func newInitCommand() *cobra.Command {
 	o := &initOptions{}
 
 	cmd := &cobra.Command{
-		Use:     "init",
+		Use:     "init [ PACKAGE_SOURCE ]",
 		Aliases: []string{"i"},
 		Short:   lang.CmdInitShort,
 		Long:    lang.CmdInitLong,
 		Example: lang.CmdInitExample,
+		Args:    cobra.MaximumNArgs(1),
+		PreRun:  o.preRun,
 		RunE:    o.run,
 	}
 
 	v := getViper()
 
 	// Init package set variable flags
-	cmd.Flags().StringToStringVar(&o.setVariables, "set", v.GetStringMapString(VPkgDeploySet), lang.CmdInitFlagSet)
+	cmd.Flags().StringToStringVar(&o.setVariables, "set", v.GetStringMapString(VPkgDeploySet), "Alias for --set-variables")
+	_ = cmd.Flags().MarkDeprecated("set", "Use --set-variables instead")
+	cmd.Flags().StringToStringVar(&o.setVariables, "set-variables", v.GetStringMapString(VPkgDeploySet), lang.CmdInitFlagSetVariables)
 
 	// Continue to require --confirm flag for init command to avoid accidental deployments
 	cmd.Flags().BoolVarP(&o.confirm, "confirm", "c", false, lang.CmdInitFlagConfirm)
@@ -103,11 +109,15 @@ func newInitCommand() *cobra.Command {
 
 	cmd.Flags().IntVar(&o.retries, "retries", v.GetInt(VPkgRetries), lang.CmdPackageFlagRetries)
 	cmd.Flags().StringVarP(&o.publicKeyPath, "key", "k", v.GetString(VPkgPublicKey), lang.CmdPackageFlagFlagPublicKey)
-	cmd.Flags().BoolVar(&o.skipSignatureValidation, "skip-signature-validation", false, lang.CmdPackageFlagSkipSignatureValidation)
+	cmd.Flags().BoolVar(&o.verify, "verify", v.GetBool(VPkgVerify), lang.CmdPackageFlagVerify)
 	cmd.Flags().IntVar(&o.ociConcurrency, "oci-concurrency", v.GetInt(VPkgOCIConcurrency), lang.CmdPackageFlagConcurrency)
+	cmd.Flags().BoolVar(&o.skipSignatureValidation, "skip-signature-validation", false, lang.CmdPackageFlagSkipSignatureValidation)
+	errSig := cmd.Flags().MarkDeprecated("skip-signature-validation", "Signature verification now occurs on every execution, but is not enforced by default. Use --verify to enforce validation. This flag will be removed in Zarf v1.0.0.")
+	if errSig != nil {
+		logger.Default().Debug("unable to mark skip-signature-validation", "error", errSig)
+	}
 
 	// If an external registry is used then don't allow users to configure the internal registry / injector
-	cmd.MarkFlagsMutuallyExclusive("registry-url", "registry-mode")
 	cmd.MarkFlagsMutuallyExclusive("registry-url", "injector-port")
 	cmd.MarkFlagsMutuallyExclusive("registry-url", "nodeport")
 
@@ -116,14 +126,29 @@ func newInitCommand() *cobra.Command {
 	return cmd
 }
 
-func (o *initOptions) run(cmd *cobra.Command, _ []string) error {
+func (o *initOptions) preRun(cmd *cobra.Command, _ []string) {
+	// Handle deprecated --skip-signature-validation flag for backwards compatibility
+	if cmd.Flags().Changed("skip-signature-validation") {
+		logger.Default().Warn("--skip-signature-validation is deprecated and will be removed in v1.0.0. Use --verify to enforce signature validation.")
+
+		if cmd.Flags().Changed("verify") {
+			return
+		}
+
+		o.verify = !o.skipSignatureValidation
+	}
+}
+
+func (o *initOptions) run(cmd *cobra.Command, args []string) error {
 	ctx := cmd.Context()
 
-	if err := o.validateInitFlags(); err != nil {
+	err := o.validateInitFlags()
+	if err != nil {
 		return fmt.Errorf("invalid command flags were provided: %w", err)
 	}
 
-	if err := validateExistingStateMatchesInput(cmd.Context(), o.registryInfo, o.gitServer, o.artifactServer); err != nil {
+	err = validateExistingStateMatchesInput(cmd.Context(), o.registryInfo, o.gitServer, o.artifactServer)
+	if err != nil {
 		return err
 	}
 
@@ -135,12 +160,18 @@ func (o *initOptions) run(cmd *cobra.Command, _ []string) error {
 		}
 	}
 
-	initPackageName := config.GetInitPackageName()
+	packageSource := ""
 
-	// Try to use an init-package in the executable directory if none exist in current working directory
-	packageSource, err := o.findInitPackage(cmd.Context(), initPackageName)
-	if err != nil {
-		return err
+	if len(args) > 0 {
+		packageSource = args[0]
+	} else {
+		initPackageName := config.GetInitPackageName()
+
+		// Try to use an init-package in the executable directory if none exist in current working directory
+		packageSource, err = o.findInitPackage(cmd.Context(), initPackageName)
+		if err != nil {
+			return err
+		}
 	}
 
 	v := getViper()
@@ -153,15 +184,18 @@ func (o *initOptions) run(cmd *cobra.Command, _ []string) error {
 	}
 
 	loadOpt := packager.LoadOptions{
-		PublicKeyPath:           o.publicKeyPath,
-		SkipSignatureValidation: o.skipSignatureValidation,
-		Filter:                  filters.Empty(),
-		Architecture:            config.GetArch(),
-		CachePath:               cachePath,
+		PublicKeyPath:        o.publicKeyPath,
+		VerificationStrategy: getVerificationStrategy(o.verify),
+		Filter:               filters.Empty(),
+		Architecture:         config.GetArch(),
+		CachePath:            cachePath,
 	}
 	pkgLayout, err := packager.LoadPackage(ctx, packageSource, loadOpt)
 	if err != nil {
 		return fmt.Errorf("unable to load package: %w", err)
+	}
+	if pkgLayout.Pkg.Kind != v1alpha1.ZarfInitConfig {
+		return fmt.Errorf("zarf init can only deploy packages of kind \"%s\"", v1alpha1.ZarfInitConfig)
 	}
 	defer func() {
 		err = errors.Join(err, pkgLayout.Cleanup())

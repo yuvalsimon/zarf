@@ -45,7 +45,6 @@ const (
 	RootCmdFlagArch                  = "Architecture for OCI images and Zarf packages"
 	RootCmdFlagCachePath             = "Specify the location of the Zarf cache directory"
 	RootCmdFlagTempDir               = "Specify the temporary directory to use for intermediate files"
-	RootCmdFlagInsecure              = "Allow access to insecure registries and disable other recommended security enforcements such as package checksum and signature validation. This flag should only be used if you have a specific reason and accept the reduced security posture."
 	RootCmdFlagPlainHTTP             = "Force the connections over HTTP instead of HTTPS. This flag should only be used if you have a specific reason and accept the reduced security posture."
 	RootCmdFlagInsecureSkipTLSVerify = "Skip checking server's certificate for validity. This flag should only be used if you have a specific reason and accept the reduced security posture."
 
@@ -118,6 +117,9 @@ $ zarf init
 # Initializing w/ Zarfs internal git server:
 $ zarf init --components=git-server
 
+# Initializing w/ Zarfs with a custom init package:
+$ zarf init oci://ghcr.io/zarf-dev/packages/init:v0.69.0
+
 # Initializing w/ an internal registry but with a different nodeport:
 $ zarf init --nodeport=30333
 
@@ -142,7 +144,7 @@ $ zarf init --artifact-push-password={PASSWORD} --artifact-push-username={USERNA
 	CmdInitPullConfirm   = "Do you want to pull this init package?"
 	CmdInitPullErrManual = "pull the init package manually and place it in the current working directory"
 
-	CmdInitFlagSet = "Specify deployment variables to set on the command line (KEY=value)"
+	CmdInitFlagSetVariables = "Specify deployment variables to set on the command line (KEY=value)"
 
 	CmdInitFlagConfirm      = "Confirms package deployment without prompting. ONLY use with packages you trust. Skips prompts to review SBOM, configure variables, select optional components and review potential breaking changes."
 	CmdInitFlagComponents   = "Specify which optional components to install.  E.g. --components=git-server"
@@ -207,7 +209,8 @@ $ zarf init --artifact-push-password={PASSWORD} --artifact-push-username={USERNA
 	CmdPackageShort                       = "Zarf package commands for creating, deploying, and inspecting packages"
 	CmdPackageFlagConcurrency             = "Number of concurrent layer operations when pulling or pushing images or packages to/from OCI registries."
 	CmdPackageFlagFlagPublicKey           = "Path to public key file for validating signed packages"
-	CmdPackageFlagSkipSignatureValidation = "Skip validating the signature of the Zarf package"
+	CmdPackageFlagVerify                  = "Verify the Zarf package signature"
+	CmdPackageFlagSkipSignatureValidation = "[Deprecated] Skip validating the signature of the Zarf package"
 	CmdPackageFlagRetries                 = "Number of retries to perform for Zarf operations like git/image pushes"
 
 	CmdPackageCreateShort = "Creates a Zarf package from a given directory or the current directory"
@@ -248,14 +251,14 @@ $ zarf package mirror-resources <your-package.tar.zst> --repos \
 	--git-push-password <git-push-password>
 `
 
-	CmdPackageInspectShort = "Displays the definition of a Zarf package (runs offline)"
-	CmdPackageInspectLong  = "Displays the 'zarf.yaml' definition for the specified package and optionally allows SBOMs to be viewed"
+	CmdPackageInspectShort = "Commands for gathering information from a built package"
 
 	CmdPackageListShort         = "Lists out all of the packages that have been deployed to the cluster (runs offline)"
 	CmdPackageListNoPackageWarn = "Unable to get the packages deployed to the cluster"
 
 	CmdPackageCreateFlagConfirm               = "Confirm package creation without prompting"
-	CmdPackageCreateFlagSet                   = "Specify package variables to set on the command line (KEY=value)"
+	CmdPackageCreateFlagSetPkgTmpl            = "Specify package templates to set on the command line (KEY=value)"
+	CmdPackageCreateFlagSetVariables          = "Specify package variables to set on the command line (KEY=value)"
 	CmdPackageCreateFlagOutput                = "Specify the output (either a directory or an oci:// URL) for the created Zarf package"
 	CmdPackageCreateFlagSbom                  = "View SBOM contents after creating the package"
 	CmdPackageCreateFlagSbomOut               = "Specify an output directory for the SBOMs from the created Zarf package"
@@ -274,7 +277,8 @@ $ zarf package mirror-resources <your-package.tar.zst> --repos \
 
 	CmdPackageDeployFlagConfirm                = "Confirms package deployment without prompting. ONLY use with packages you trust. Skips prompts to review SBOM, configure variables, select optional components and review potential breaking changes."
 	CmdPackageDeployFlagAdoptExistingResources = "Adopts any pre-existing K8s resources into the Helm charts managed by Zarf. ONLY use when you have existing deployments you want Zarf to takeover."
-	CmdPackageDeployFlagSet                    = "Specify deployment variables to set on the command line (KEY=value)"
+	CmdPackageDeployFlagSetVariables           = "Specify deployment variables to set on the command line (KEY=value)"
+	CmdPackageDeployFlagSetValues              = "Specify deployment package values to set on the command line (key.path=value)."
 	CmdPackageDeployFlagComponents             = "Comma-separated list of components to deploy.  Adding this flag will skip the prompts for selected components.  Globbing component names with '*' and deselecting 'default' components with a leading '-' are also supported."
 	CmdPackageDeployFlagShasum                 = "Shasum of the package to deploy. Required if deploying a remote https package."
 	CmdPackageDeployFlagTimeout                = "Timeout for health checks and Helm operations such as installs and rollbacks"
@@ -290,11 +294,12 @@ $ zarf package mirror-resources <your-package.tar.zst> --repos \
 	CmdPackageInspectFlagListImages = "List images in the package (prints to stdout)"
 	CmdPackageInspectFlagNamespace  = "[Alpha] Override the namespace for package inspection. Applicable only to packages deployed using the namespace flag."
 
-	CmdPackageRemoveShort          = "Removes a Zarf package that has been deployed already (runs offline)"
-	CmdPackageRemoveLong           = "Removes a Zarf package that has been deployed already (runs offline). Remove reverses the deployment order, the last component is removed first."
-	CmdPackageRemoveFlagConfirm    = "Confirms the removal action"
-	CmdPackageRemoveFlagComponents = "Comma-separated list of components to remove.  This list will be respected regardless of a component's 'required' or 'default' status.  Globbing component names with '*' and deselecting components with a leading '-' are also supported."
-	CmdPackageRemoveFlagNamespace  = "[Alpha] Override the namespace for package removal. Applicable only to packages deployed using the namespace flag."
+	CmdPackageRemoveShort           = "Removes a Zarf package that has been deployed already (runs offline)"
+	CmdPackageRemoveLong            = "Removes a Zarf package that has been deployed already (runs offline). Remove reverses the deployment order, the last component is removed first."
+	CmdPackageRemoveFlagConfirm     = "Confirms the removal action"
+	CmdPackageRemoveFlagComponents  = "Comma-separated list of components to remove.  This list will be respected regardless of a component's 'required' or 'default' status.  Globbing component names with '*' and deselecting components with a leading '-' are also supported."
+	CmdPackageRemoveFlagNamespace   = "[Alpha] Override the namespace for package removal. Applicable only to packages deployed using the namespace flag."
+	CmdPackageRemoveFlagValuesFiles = "Path to values file(s) for removal actions"
 
 	CmdPackagePublishShort   = "Publishes a Zarf package to a remote registry"
 	CmdPackagePublishExample = `
@@ -347,13 +352,13 @@ $ zarf package verify zarf-package-demo-amd64-1.0.0.tar.zst
 	CmdPackagePullShort   = "Pulls a Zarf package from a remote registry and save to the local file system"
 	CmdPackagePullExample = `
 # Pull a package matching the current architecture
-$ zarf package pull oci://ghcr.io/zarf-dev/packages/dos-games:1.2.0
+$ zarf package pull oci://ghcr.io/zarf-dev/packages/dos-games:1.3.0
 
 # Pull a package matching a specific architecture
-$ zarf package pull oci://ghcr.io/zarf-dev/packages/dos-games:1.2.0 -a arm64
+$ zarf package pull oci://ghcr.io/zarf-dev/packages/dos-games:1.3.0 -a arm64
 
 # Pull a skeleton package
-$ zarf package pull oci://ghcr.io/zarf-dev/packages/dos-games:1.2.0 -a skeleton`
+$ zarf package pull oci://ghcr.io/zarf-dev/packages/dos-games:1.3.0 -a skeleton`
 	CmdPackagePullFlagOutputDirectory = "Specify the output directory for the pulled Zarf package"
 	CmdPackagePullFlagShasum          = "Shasum of the package to pull. Required if pulling a https package. A shasum can be retrieved using 'zarf dev sha256sum <url>'"
 
@@ -389,7 +394,8 @@ $ zarf package pull oci://ghcr.io/zarf-dev/packages/dos-games:1.2.0 -a skeleton`
 		"NOTE: This file must not already exist. If no filename is provided, the config will be written to the current working directory as zarf-config.toml."
 
 	CmdDevFlagExtractPath          = `The path inside of an archive to use to calculate the sha256sum (i.e. for use with "files.extractPath")`
-	CmdDevFlagSet                  = "Specify package variables to set on the command line (KEY=value). Note, if using a config file, this will be set by [package.create.set]."
+	CmdDevFlagSetPkgTmpl           = "Specify package templates to set on the command line (KEY=value). Note, if using a config file, this will be set by [package.create.set]."
+	CmdDevFlagSetVariables         = "Specify package variables to set on the command line (KEY=value). Note, if using a config file, this will be set by [package.create.set]."
 	CmdDevFlagRepoChartPath        = `If git repos hold helm charts, often found with gitops tools, specify the chart path, e.g. "/" or "/chart"`
 	CmdDevFlagGitAccount           = "User or organization name for the git account that the repos are created under."
 	CmdDevFlagKubeVersion          = "Override the default helm template KubeVersion when performing a package chart template"
@@ -510,14 +516,15 @@ $ zarf tools registry export 127.0.0.1:31999/stefanprodan/podinfo:6.4.0 -
 $ zarf tools registry export ghcr.io/stefanprodan/podinfo:6.4.0 podinfo.6.4.0.tar
 `
 
-	CmdToolsRegistryPruneShort       = "Prunes images from the registry that are not currently being used by any Zarf packages."
-	CmdToolsRegistryPruneFlagConfirm = "Confirm the image prune action to prevent accidental deletions"
-	CmdToolsRegistryPruneImageList   = "The following image digests will be pruned from the registry:"
-	CmdToolsRegistryPruneNoImages    = "There are no images to prune"
-	CmdToolsRegistryPruneLookup      = "Looking up images within package definitions"
-	CmdToolsRegistryPruneCatalog     = "Cataloging images in the registry"
-	CmdToolsRegistryPruneCalculate   = "Calculating images to prune"
-	CmdToolsRegistryPruneDelete      = "Deleting unused images"
+	CmdToolsRegistryPruneShort             = "Prunes images from the registry that are not currently being used by any Zarf packages."
+	CmdToolsRegistryPruneFlagConfirm       = "Confirm the image prune action to prevent accidental deletions"
+	CmdToolsRegistryPruneFlagIgnoreMissing = "Ignore missing image manifests and continue pruning"
+	CmdToolsRegistryPruneImageList         = "The following image digests will be pruned from the registry:"
+	CmdToolsRegistryPruneNoImages          = "There are no images to prune"
+	CmdToolsRegistryPruneLookup            = "Looking up images within package definitions"
+	CmdToolsRegistryPruneCatalog           = "Cataloging images in the registry"
+	CmdToolsRegistryPruneCalculate         = "Calculating images to prune"
+	CmdToolsRegistryPruneDelete            = "Deleting unused images"
 
 	CmdToolsRegistryFlagVerbose  = "Enable debug logs"
 	CmdToolsRegistryFlagInsecure = "Allow image references to be fetched without TLS"
@@ -620,6 +627,31 @@ $ zarf tools wait-for http google.com success                           #  wait 
 	CmdToolsWaitForFlagTimeout   = "Specify the timeout duration for the wait command."
 	CmdToolsWaitForFlagNamespace = "Specify the namespace of the resources to wait for."
 
+	CmdToolsWaitForResourceShort = "Waits for a given Kubernetes resource to be fully reconciled"
+	CmdToolsWaitForResourceLong  = "Waits for a given Kubernetes resource to be fully reconciled unless a condition is provided.\n" +
+		"Resource reconciliation is determined according to https://github.com/kubernetes-sigs/cli-utils/blob/master/pkg/kstatus/README.md#kstatus\n" +
+		"If a resource does not implement reconciliation statuses, then this command will wait for that resource to exist"
+	CmdToolsWaitForResourceExample = `
+$ zarf tools wait-for resource deployment my-deployment -n default               #  wait for deployment to be reconciled (default condition)
+$ zarf tools wait-for resource po cool-pod-name -n cool                          #  wait for pod (using po alias) cool-pod-name in namespace cool to be reconciled
+$ zarf tools wait-for resource pod my-pod-name ready -n default                  #  wait for pod my-pod-name in namespace default to have the ready condition
+$ zarf tools wait-for resource pod app=podinfo -n podinfo                        #  wait for pod(s) with label app=podinfo in namespace podinfo to be reconciled
+$ zarf tools wait-for resource deployment zarf-docker-registry exists -n zarf    #  wait for deployment zarf-docker-registry in namespace zarf to exist
+$ zarf tools wait-for resource svc zarf-docker-registry delete -n zarf           #  wait for service zarf-docker-registry in namespace zarf to not exist
+$ zarf tools wait-for resource pvc -n zarf                                       #  wait for any pvc in namespace zarf to exist
+$ zarf tools wait-for resource crd addons.k3s.cattle.io                          #  wait for crd addons.k3s.cattle.io to exist
+$ zarf tools wait-for resource sts test-sts '{.status.availableReplicas}'=23     #  wait for statefulset test-sts to have 23 available replicas
+`
+
+	CmdToolsWaitForNetworkShort   = "Waits for a network endpoint to meet the condition"
+	CmdToolsWaitForNetworkLong    = "Waits for a network endpoint using REST or TCP to respond with a status code (default 2xx)"
+	CmdToolsWaitForNetworkExample = `
+$ zarf tools wait-for network http localhost:8080 200                           #  wait for a 200 response from http://localhost:8080
+$ zarf tools wait-for network tcp localhost:8080                                #  wait for a connection to be established on localhost:8080
+$ zarf tools wait-for network https 1.1.1.1 200                                 #  wait for a 200 response from https://1.1.1.1
+$ zarf tools wait-for network http google.com                                   #  wait for any 2xx response from http://google.com
+$ zarf tools wait-for network http google.com success                           #  wait for any 2xx response from http://google.com
+`
 	CmdToolsKubectlDocs = "Kubectl command. See https://kubernetes.io/docs/reference/kubectl/overview/ for more information."
 
 	CmdToolsGetCredsShort   = "Displays a table of credentials for deployed Zarf services. Pass a service key to get a single credential"

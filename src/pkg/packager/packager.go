@@ -10,18 +10,12 @@ import (
 
 	"github.com/zarf-dev/zarf/src/api/v1alpha1"
 	"github.com/zarf-dev/zarf/src/internal/packager/template"
-	"github.com/zarf-dev/zarf/src/internal/value"
+	"github.com/zarf-dev/zarf/src/pkg/value"
 	"github.com/zarf-dev/zarf/src/pkg/variables"
 )
 
 // ValuesOverrides is a map of component names to chart names containing Helm Chart values to override values on deploy.
 type ValuesOverrides map[string]map[string]map[string]any
-
-// RemoteOptions are common options when calling a remote
-type RemoteOptions struct {
-	PlainHTTP             bool
-	InsecureSkipTLSVerify bool
-}
 
 func getPopulatedVariableConfig(ctx context.Context, pkg v1alpha1.ZarfPackage, setVariables map[string]string, isInteractive bool) (*variables.VariableConfig, error) {
 	variableConfig := template.GetZarfVariableConfig(ctx, isInteractive)

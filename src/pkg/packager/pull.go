@@ -17,6 +17,7 @@ import (
 
 	"github.com/zarf-dev/zarf/src/pkg/logger"
 	"github.com/zarf-dev/zarf/src/pkg/utils"
+	"github.com/zarf-dev/zarf/src/types"
 
 	"github.com/defenseunicorns/pkg/helpers/v2"
 	"github.com/defenseunicorns/pkg/oci"
@@ -33,8 +34,6 @@ import (
 type PullOptions struct {
 	// SHASum uniquely identifies a package based on its contents.
 	SHASum string
-	// SkipSignatureValidation flags whether Pull should skip validating the signature.
-	SkipSignatureValidation bool
 	// Architecture is the package architecture.
 	Architecture string
 	// PublicKeyPath validates the create-time signage of a package.
@@ -43,7 +42,9 @@ type PullOptions struct {
 	OCIConcurrency int
 	// CachePath is used to cache layers from OCI package pulls
 	CachePath string
-	RemoteOptions
+	types.RemoteOptions
+	// VerificationStrategy for explicit definition
+	layout.VerificationStrategy
 }
 
 // Pull takes a source URL and destination directory, fetches the Zarf package from the given sources, and returns the path to the fetched package.
@@ -69,14 +70,14 @@ func Pull(ctx context.Context, source, destination string, opts PullOptions) (_ 
 	}
 
 	pkgLayout, err := LoadPackage(ctx, source, LoadOptions{
-		Shasum:                  opts.SHASum,
-		Architecture:            arch,
-		PublicKeyPath:           opts.PublicKeyPath,
-		SkipSignatureValidation: opts.SkipSignatureValidation,
-		Output:                  destination,
-		OCIConcurrency:          opts.OCIConcurrency,
-		RemoteOptions:           opts.RemoteOptions,
-		CachePath:               opts.CachePath,
+		Shasum:               opts.SHASum,
+		Architecture:         arch,
+		PublicKeyPath:        opts.PublicKeyPath,
+		VerificationStrategy: opts.VerificationStrategy,
+		Output:               destination,
+		OCIConcurrency:       opts.OCIConcurrency,
+		RemoteOptions:        opts.RemoteOptions,
+		CachePath:            opts.CachePath,
 	})
 	if err != nil {
 		return "", err
@@ -94,16 +95,16 @@ func Pull(ctx context.Context, source, destination string, opts PullOptions) (_ 
 }
 
 type pullOCIOptions struct {
-	Source                  string
-	Shasum                  string
-	Architecture            string
-	LayersSelector          zoci.LayersSelector
-	Filter                  filters.ComponentFilterStrategy
-	OCIConcurrency          int
-	CachePath               string
-	PublicKeyPath           string
-	SkipSignatureValidation bool
-	RemoteOptions
+	Source         string
+	Shasum         string
+	Architecture   string
+	LayersSelector zoci.LayersSelector
+	Filter         filters.ComponentFilterStrategy
+	OCIConcurrency int
+	CachePath      string
+	PublicKeyPath  string
+	types.RemoteOptions
+	layout.VerificationStrategy
 }
 
 func pullOCI(ctx context.Context, opts pullOCIOptions) (*layout.PackageLayout, error) {
@@ -157,11 +158,12 @@ func pullOCI(ctx context.Context, opts pullOCIOptions) (*layout.PackageLayout, e
 	if err != nil {
 		return nil, err
 	}
+
 	layoutOpts := layout.PackageLayoutOptions{
-		PublicKeyPath:           opts.PublicKeyPath,
-		SkipSignatureValidation: opts.SkipSignatureValidation,
-		IsPartial:               isPartial,
-		Filter:                  opts.Filter,
+		PublicKeyPath:        opts.PublicKeyPath,
+		VerificationStrategy: opts.VerificationStrategy,
+		IsPartial:            isPartial,
+		Filter:               opts.Filter,
 	}
 	pkgLayout, err := layout.LoadFromDir(ctx, dirPath, layoutOpts)
 	if err != nil {

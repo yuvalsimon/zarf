@@ -27,7 +27,6 @@ const (
 	VArchitecture          = "architecture"
 	VZarfCache             = "zarf_cache"
 	VTmpDir                = "tmp_dir"
-	VInsecure              = "insecure"
 	VPlainHTTP             = "plain_http"
 	VInsecureSkipTLSVerify = "insecure_skip_tls_verify"
 
@@ -75,6 +74,7 @@ const (
 
 	VPkgOCIConcurrency = "package.oci_concurrency"
 	VPkgPublicKey      = "package.public_key"
+	VPkgVerify         = "package.verify"
 
 	// Package create config keys
 
@@ -100,6 +100,7 @@ const (
 	VPkgDeployNamespace  = "package.deploy.namespace"
 	VPkgRetries          = "package.deploy.retries"
 	VPkgDeployValues     = "package.deploy.values"
+	VPkgDeploySetValues  = "package.deploy.set_values"
 
 	// Package publish config keys
 
@@ -118,6 +119,10 @@ const (
 	// Package pull config keys
 
 	VPkgPullOutputDir = "package.pull.output_directory"
+
+	// Package remove config keys
+
+	VPkgRemoveSetValues = "package.remove.set_values"
 
 	// Dev deploy config keys
 
